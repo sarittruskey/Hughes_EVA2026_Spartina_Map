@@ -1,0 +1,8 @@
+# R artifacts
+.Rhistory
+.RData
+.Rproj.user/
+
+# macOS system file
+.DS_Store
+

@@ -1,0 +1,520 @@
+---
+title: "Maps for Hughes spartina sourcing EVA 2026 submission"
+author: Sarit Truskey
+date: "Created 2026-02-04 | Last updated `r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    number_sections: false
+---
+
+This Rmd file generates the maps included in the Hughes et al. 2026 *Spartina* sourcing manuscript submitted to Evolutionary Applications. 
+
+I've included detailed annotations as a walk-through to understanding what is going on in this script and to facilitate further map making for Hughes Lab members (particularly for fine-scaled maps of Massachusetts coastal areas but also more widely applicable). Happy mapping!
+
+**Before running**: Set your working directory to the Hughes_EVA2026_Map/ folder. The directory check in the first chunk will confirm you're in the right place.
+
+## Outline
+
+Randall asked for map similar-ish to Fig 1a of Truskey et al. 2025. Specifically, 
+* a base map with approximate triangles to indicate where the 3 *Spartina* nurseries in Massachusetts (MA), New Jersey (NJ), and Maryland (MD), 
+* and then an inset map of the local MA marshes that shows the 9 subsites at Belle Isle (diamonds), Rumney (circles), and Rowley (squares) where separate collections were also taken.  
+
+Collections for the two focal species *Spartina alterniflora* (SA) and *Spartina patens* (SP) were effectively from most of the same subsites, so Randall suggests just using SA coordinates. We could then differentiate the only two unique subsites (Law’s is SA only and Stackyard South is SP only) as needed. Analyses and other plots are at the site-level, so seeing a super resolved distribution of all the subsites might not be needed. I'll go ahead and generate these subsite-level plots just in case though. 
+
+## Data Provenance
+* Spatial outline shapefiles for Massachusetts were obtained from MassGIS Data [(link to 25k state polygon and line datalayers)](https://www.mass.gov/info-details/massgis-data-state-outlines) 
+* Site- and subsite-level data from local marshes were compiled by Hughes lab members.
+
+```{r setup, include=FALSE}
+
+# Global chunk options
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE, # don't include package loading messages
+  warning = FALSE # don't print warnings in the output knitted file
+)
+
+# Directory structure required to run this script
+required_dirs <- c("data", "map_figs") # this Rmd should be housed within a directory that has internal directories data (that has the input data to produce inset figures) and map_figs (where output map plots are written to)
+missing_dirs <- required_dirs[!dir.exists(required_dirs)]
+
+if (length(missing_dirs) > 0) { # this if-statement will double-check that this is the case for you and, if not the case, will produce the following error message that includes which of the internal directories you are missing 
+  stop(
+    "This Rmd must be run from the root directory that includes data and map_figs directories.\n",
+    "Missing directories: ", paste(missing_dirs, collapse = ", ")
+  )
+}
+
+```
+
+### Load libraries
+```{r libraries and session-info}
+
+# you can install any missing packages here
+# install.packages(c(
+#   "sf",
+#   "ggplot2",
+#   "rnaturalearth",
+#   "rnaturalearthdata",
+#   "maps",
+#   "dplyr",
+#   "ggspatial"
+# ))
+
+library(sf)
+library(ggplot2)
+library(rnaturalearth)
+library(maps)
+library(dplyr)
+library(ggspatial) # for adding scale bars to inset zoomed in plots
+
+sessionInfo() # this is always nice to include for reproducibility and for when you need to report package versions downstream (in a methods section, for instance)
+```
+
+## A. Make base map with nursery and local marsh source sites
+### A1. Get background layers for base map
+```{r}
+# US state outlines (as sf)
+states <- st_as_sf(map("state", plot = FALSE, fill = TRUE))
+
+# world polygons provided here as an optional alternative background layer
+# note there can be slight mismatches between world and states polygons so use one consistently for any given map figure
+# world <- ne_countries(scale = "medium", returnclass = "sf")
+
+```
+
+### A2-4. Read in and add location data
+```{r}
+# Read in local marsh subsite data
+ma_subsites_locs <- read.csv(
+  file.path("data","Table 1 for Belle Isle ms - Sheet1.csv"), 
+  stringsAsFactors = FALSE) # stringsAsFactors = FALSE ensures character columns (like site names) are read as plain text rather than factors, which can cause some unexpected behavior in filtering and plotting
+names(ma_subsites_locs) <- tolower(names(ma_subsites_locs))
+head(ma_subsites_locs)
+
+# if longitude not listed as negative (i.e., in provided data), set to negative here or it won't appear in base maps...
+ma_subsites_locs$longitude <- -ma_subsites_locs$longitude
+
+# Create a single "local marsh sites" point 
+# getting the mean across all marsh subsites; this is just to place a single local marsh marker...
+marsh_centerpt <- ma_subsites_locs %>% #in case you don't work with dplyr much, this is a pipe operator which basically means “take this dataset provided, then do the following...”
+  summarize( #in this case, using summarize to parse data down to single row with the folowing columns...
+    lat = mean(latitude, na.rm = TRUE), # lat with a mean latitude value from the latitude column in ma_subsites_locs
+    lon = mean(longitude, na.rm = TRUE) #same for long
+  ) %>%
+  mutate(type = "marsh", site_label = "marsh") # then add new columns (type and site_label) to this new dataframe with the values "marsh" 
+
+#the output is a dataframe called marsh_centerpt with a single row and columns c(lat, lon, type, site_label) with values as described
+marsh_centerpt # we'll use this to center a rectangle around the local marsh sites
+
+# Nursery locations 
+# I just got approximate ones off google maps that reflected the vague area in which the nurseries were located and created a dataframe to house those values
+
+nursery_sites <- data.frame(
+  type = "nursery",
+  site_label = c("MA", "NJ", "MD"),
+  lat = c(42.400851, 40.027180, 38.645799),
+  lon = c(-72.331368, -74.493395, -75.998390)
+)
+
+# Combine the data from the single local marsh representative site + nursery sites
+(all_sites_locs <- bind_rows(nursery_sites, marsh_centerpt)) 
+# looks good
+
+```
+
+### A5. Create base map plot 
+Going to break this down with detailed annotations as the first map plot
+```{r}
+base_map <- ggplot() +
+  geom_sf( # using state polygons and outlines from states object imported above
+    data = states, 
+    fill = "lightgrey", # land should be lightgrey fill
+    color = "black", # state borders and coastline should be outlines in black
+    linewidth = 0.3) +
+  coord_sf( # this controls map extent: adjust these numbers as wanted to make the plot more or less zoomed in to the sites
+    xlim = c(-78, -69), # x is longitude
+    ylim = c(37, 43.5), # y is latitude
+    expand = FALSE) + 
+  geom_point( # add points for sources
+    data = all_sites_locs,
+    aes(x = lon, y = lat, 
+        shape = type, # want shape to change according to nursery or marsh
+        fill = site_label, # want color to change to try to match the current fig 1 (add in colors for fill with scale_fill_manual)
+        size = type), # want to make the marsh site larger to try to encompass all of the source areas of local marsh subsites
+    color = "black", # setting outline of the shapes black here
+    alpha = 0.95 # making them a tiny bit see-through (for more see-through, decrease alpha value)
+  ) +
+  scale_shape_manual( # set shape values
+    values = c(marsh = 0, nursery = 24), # empty square, filled-in triangle;
+    guide = "none") +  # guide = 'none' means no guide for legend (going to make a single guide that covers it manually below)
+  scale_size_manual( # set size values
+    values  = c(marsh = 12, nursery = 7), # making marsh larger
+    guide = "none") + 
+  scale_fill_manual( # set fill color values; going to use the fill guide as the single all-things-covered guide so adding a bit extra here...
+    values  = c( # this sets the colors that appear in the key
+      marsh = "transparent", 
+      NJ = "plum4", 
+      MA = "plum3", 
+      MD = "plum1"),
+    breaks = c("marsh", "MA", "NJ", "MD"), # this controls the order in which the values are listed 
+    labels = c( # this controls the actual name that will appear in the key 
+    MA   = "MA nursery",
+    NJ   = "NJ nursery",
+    MD   = "MD nursery",
+    marsh = "Local marshes" #confirmed with Randall that this should be 'Local marshes'
+  ),
+  name = "Source") + # this renames the key itself 
+  guides( # going to customize guide for fill a bit more here
+    fill = guide_legend(
+      override.aes = list( # this forces the legend keys to render under the following arguments as opposed to the defaults...
+        shape = c(22, 24, 24, 24), # render with these specific shapes (note, needs to be provided in order specified with breaks if breaks was provided)
+        color = "black", # black outline
+        size = 6) # make a bit bigger than default 
+    )) +
+  labs(x = "Longitude", # add x and y-labels...can also add guide labels here too
+       y = "Latitude") +
+  theme( # the following are additional specifications more about aesthetics than anything...
+    panel.grid = element_line(color = "transparent"),
+    panel.background = element_rect(fill = "white"),
+    text = element_text(size = 24, color = "black"), # make text bigger and color should be black
+    axis.text.x = element_text(angle = 90, hjust = 1, size = 20, color = "black"), # sets x-axis values text size and angle flips them 90 degrees
+    axis.text.y = element_text(size = 20, color = "black"),
+    panel.border = element_rect(color = "black", fill=NA, linewidth=2) # adds a panel border here...i like them for maps but up to you!
+  )
+
+base_map
+
+base_map_nolegend <- base_map + theme(legend.position = "none") # remove the guide
+  
+base_map_nolegend
+```
+
+### A6. Export to pdf
+```{r}
+# # uncomment this chunk to write new plots to map_figs directory
+# # save plots as pdfs
+#
+# ggsave(
+#   filename =
+#     file.path(
+#       "map_figs", #output directory with root directory (see READme for expected directory structure if this is confusing)
+#       "base_map.pdf"), # last is the name for the output file, in this case base_map.pdf
+#   plot = base_map,
+#   width = 8, height = 6) # specify dimensions for pdf here
+#
+# # also want to output second plot that excludes the legend
+# ggsave(
+#   filename = file.path( "map_figs","base_map_nolegend.pdf"),
+#   plot = base_map_nolegend,
+#   width = 8, height = 6)
+
+```
+
+
+## B. Inset maps for local marsh source subsites
+### B1. Read in MassGIS coastline/shoreline layer
+I am using the shapefiles for Massachusetts coastline provide by MassGIS [(link)](https://www.mass.gov/info-details/massgis-data-state-outlines)
+* Note, you need to download, unzip, and keep the contents of the full file with all shapefiles and not just file with .shp extension. See Data setup in README for further download instructions. If you are getting cannot open errors from st_read() below an issue with not having all the required shapefiles is almost certainly why.
+* Secondary note, you can make similar fine-scale maps of other areas by just subbing in shapefiles for those areas. A link to Rhode Island shapefiles is included in README. 
+
+```{r load shapefiles}
+# Check that shapefiles are where we expect them to be and, if not, provide user with a readout of whether one is missing. This isn't something you need to add to future scripts of your own, but I have added here as a troubleshooting step for why st_read() may not be working for you.  
+shp_path <- file.path("data", "outline25k", "OUTLINE25K_ARC.shp")
+pol_path  <- file.path("data", "outline25k", "OUTLINE25K_POLY.shp")
+
+missing_shp <- c(shp_path, pol_path)[!file.exists(c(shp_path, pol_path))] 
+
+if (length(missing_shp) > 0) { # checks whether the two shp files provided at the file paths above exist, otherwise will provide the following message
+  stop(
+    "MassGIS shapefile(s) not found:\n",
+    paste(" -", missing_shp, collapse = "\n"), "\n",
+    "Download from: https://www.mass.gov/info-details/massgis-data-state-outlines\n",
+    "Unzip the outline25k download such that ALL contents should now be in data/outline25k/"
+  )
+}
+
+# Read in the shapefiles now that we have confirmed they are where we expect them to be
+
+# The first is the coastline arc file (outlines only); provide st_read function the path to the arc shp file
+ma_outline <- st_read(shp_path) |> #this base R pipe (|>) then passes the output of st_read() to the next function
+  st_transform(4326) # st_transform() is important in converting the shapefile into a new crs (coordinate reference system), specifically '4326' reprojects to lat/lon
+
+# The second is the land polygon file that is helpful if you want to fill the outlines in (I like using grey backgrounds for land to differentiate from coastal water)
+ma_outline_poly <- st_read(pol_path) |> st_transform(4326) 
+
+```
+
+### B2. Get subsite location points for plotting
+Randall suggested using SA pts then adding the single SP-only pt and a label to the SA-only pt, so I'm just going to do that. Not sure whether individually differentiating subsite pts is important...would be a lot of colors so probably better to do with numbers for now. Adding subsite numbers to data to be able to do this in plotting. 
+```{r}
+# Get subsite points to add to inset map
+ma_subsites_locs  # already loaded from basemap
+
+# Keep all S. alterniflora (SA) rows 
+sa_pts <- ma_subsites_locs %>%
+  filter(species == "S. alterniflora") %>% # keep only rows where species is SA
+  mutate(species_used = "SA") #add a shorthand column to this df sa_pts called 'species_used' with the value "SA"
+
+# Add Stackyard South from S. patens (SP; this is the SP only site that we want to keep in inset maps)
+sp_stackyard_south <- ma_subsites_locs %>%
+  filter(species == "S. patens", subsite == "Stackyard South") %>%
+  mutate(species_used = "SP")
+
+# Combine the subsites for plotting + create plotting columns
+# we want shape to convey marsh sites
+# want to add text to subsites that are SA or SP only (don't end up using these labels but kept here anyway)
+# add subsite numbers to subsites within each marsh site
+subsites_plot_locs <- bind_rows(sa_pts, sp_stackyard_south) %>% #sa rows first, sp only site at end
+  mutate( # add the following columns with specified values...
+    site_shape = case_when( # if else type function, where site is equal to blank ~ set new column site_shape equal to blank; if condition for site not provided (TRUE) ~ keep site value
+      site == "Belle Isle" ~ "Belle Isle",
+      site == "Rumney Marsh" ~ "Rumney",
+      site == "Rowley Great Marsh" ~ "Rowley",
+      TRUE ~ site
+    ),
+    subsite_display = case_when(
+      subsite == "Law's" ~ "Law's (SA only)",
+      subsite == "Stackyard South" ~ "Stackyard South (SP only)",
+      TRUE ~ subsite
+    )
+  ) %>%
+  group_by(site_shape) %>% # want to add number within site; so group by site here (or site_shape)
+  mutate(site_num = row_number()) %>% #take row_number within a site as the value for new column site_num
+  ungroup() # ungroup everything after group_by above
+
+# Lastly, whereas the above creates site_num within a site, let's add unique site numbers across all sites that we will call site_num_1to9 for all of the 9 collection sites. To do this, we will first sort the df by site (site_shape field) north-to-south, then by decreasing longitude (right to left within each site; coast-to-inland). We'll then manually add site numbers for Rowley because it breaks the longitude order before then using row positions for the remaining sites as ordered starting from 4 (since 1-3 already assigned).
+
+subsites_plot_locs <- subsites_plot_locs %>%
+  arrange(
+    factor(site_shape, levels = c("Rowley", "Rumney", "Belle Isle")), # order rows by site as provided by levels
+    desc(longitude) # then right to left within each site with longitude
+  ) %>%
+  mutate(
+    site_num_1to9 = case_when( # create site_num_1to9 column with the following conditions...
+      subsite == "Stackyard" ~ "1",
+      subsite == "Patmos" ~ "2",
+      subsite == "Law's" ~ "3sa",
+      subsite == "Stackyard South" ~ "3sp",
+      row_number() >= 5 ~ as.character(row_number() - 1L) # starting with row number 5, site_num_1to9 will be the row_number() minus 1 integer (1L), then converted to a character
+    )
+  )
+data.frame(subsites_plot_locs) # looks good for plotting now! 
+```
+
+### B3. Generate the inset map plots
+In all, I want to create:
+1) one inset with all of the subsites (there will be 10 pts; 8 shared and 2 unique for SA or SP) added across the three local source marshes
+2) one inset with Rowley (more northern site)
+3) one inset with Rumney and Belle Isle (southern sites that are close to each other)
+4-5) additional versions of 2 and 3 inset plots with subsite numbers added (will likely only use this to ID the individual subsites as needed but may separately add numbers manually in keynote)
+
+* Note, I generally like to make all the inset maps in R and output as pdfs or jpgs but then make the final combined version of the full maps with insets added in either Keynote or Inkscape. I find making the full map version a bit finnicky in R (i.e., getting placements right, overlapping regions, etc.) and rather like to put it all together and add finishing touches in Keynote/Inkscape. You can also do this in PowerPoint. There are definitely packages that will put insets into maps for you, but I prefer doing that styling manually on my own. I've included the keynote file for this figure as a download for reference.  
+
+```{r}
+# Convert site data points to sf (lon/lat)
+pts_ll <- st_as_sf(subsites_plot_locs, coords = c("longitude", "latitude"), crs = 4326)
+# st_as_sf() converts a regular dataframe into a spatial (sf) object that ggplot's geom_sf() can plot
+# coords specifies which columns hold the x (longitude) and y (latitude) values
+# crs = 4326 tells sf these coordinates are in WGS84 lat/lon — the standard GPS coordinate system
+
+# You can also build a buffered box around points, tuning distance to in buffer_m to control the level of zoom for an inset
+# buffer_m <- 8000  # e.g., 8 km buffer; adjust until it looks right
+# zoom_geom <- st_buffer(st_union(pts_ll), dist = buffer_m)
+# zoom_bbox <- st_bbox(zoom_geom)
+# Crop coastline for faster + cleaner plotting
+# coast_crop <- st_crop(ma_outline, zoom_bbox)
+
+# note, this buffer step was really finicky to do for these maps because the coastline is kinda wonky here so it made the crop itself look strange...
+# instead, I hard coded cropped areas for insets below in each of the inset plots; leaving buffer code here in case it is useful to anyone
+
+###############
+# PLOTTING insets
+###############
+
+# I'm writing a function (inset_map_func) to generate the inset map plots because I want to make a handful of similar map figures with only slight changes between them.
+# Note: this function relies on three objects from the global environment: 
+# ma_outline, ma_outline_poly (shapefiles loaded earlier in section B1), and pts_ll (just created above).
+# These are used directly rather than passed as arguments to keep function calls simple since these don't change between inset plots. Rather the only thing I am really wanting to change is the longitude and latitude range, and maybe a few formatting variables. I describe these below in writing the function. 
+# Being able to just call the function rather than write out the full plotting chunk is nice when you are exploring the range of longitudes and latitudes you actually want to use.
+
+inset_map_func <- function(
+    long_range, # variable for longitude range (map will be cropped to these longitudes)
+    lat_range, # variable for latitude range (map will be cropped to these latitudes)
+    scale_bar_loc = "tl", # this is the area in the plot where the scale bar will be added; if not changed, will default to topleft via "tl"
+    scale_text_cex = 1.5, # this is the text size for the scale bar, defaults to 1.5 unless changed in call
+    point_size = 5, # this is the default size of the points used for subsites, unless changed in call
+    point_alpha = 0.6, # this is the default alpha value for points
+    border_linewidth = 2 # this is the weight of the border around the plot area
+) {
+  # body of function for plotting; will be similar to base map but adding a few extra things
+  ggplot() +
+    geom_sf(
+      data = ma_outline_poly, # this is the poly shapefile already imported for MA (used across inset plots)
+      fill = "grey85",
+      color = NA
+    ) +
+    geom_sf(
+      data = ma_outline, # this is the line shapefile already imported for MA (used across inset plots)
+      fill = NA,
+      color = "black",
+      linewidth = 0.2
+    ) +
+    geom_sf(
+      data = pts_ll, # this is the sf object with the subsite datapoints
+      aes(shape = site_shape, # shape of point determined by site_shape field
+          fill = site_shape), # fill color of point determined by site_shape field too
+      size = point_size, # point_size variable in function call will change size of points or default to 5
+      stroke = 0.9,
+      color = "black",
+      alpha = point_alpha # point_alpha variable in function call will change alpha for points or default to 0.6
+    ) +
+    coord_sf(
+      xlim = long_range, # long_range variable in function call will manually set x range (longitude) for map
+      ylim = lat_range,  # lat_range variable in function call will manually set y range (latitude) for map
+      expand = FALSE
+    ) +
+    scale_shape_manual( # set shape values for points by site name (site_shape field)
+      values = c(
+        "Belle Isle" = 23, # diamond
+        "Rumney" = 21, # circle
+        "Rowley" = 22  # square
+      ),
+      guide = "none" # take out legend for shape 
+    ) +
+    scale_fill_manual( # set fill values for points by site name (site_shape field values, in this instance)
+      values = c(
+        "Rowley"   = "turquoise1",
+        "Rumney"   = "turquoise4",
+        "Belle Isle" = "turquoise3"
+      ),
+      breaks = c("Rowley", "Rumney", "Belle Isle"), # list sites in this order in legend
+      name = "Site" #name legend 'Site'
+    ) +
+    guides(
+      fill = guide_legend( # customize fill legend
+        override.aes = list(
+          shape = c(22, 21, 23), # this should be in order of breaks for fill supplied above
+          color = "black",
+          size = 6 # making points a bit bigger in legend
+        )
+      )
+    ) +
+    annotation_scale( #add spatial scale bar
+      location = scale_bar_loc, # where you want the scale bar to be placed; defaults to "tl" topleft but can be changed in calling function
+      text_cex = scale_text_cex # size of text in scale bar; defaults to 1.5 unless another value provided
+    ) +
+    theme(
+      panel.background = element_rect(fill = "white"),
+      panel.grid = element_line(color = "transparent"),
+      axis.title = element_blank(), #removes axes title; if you want to keep axes labels, remove or comment out this line
+      axis.text = element_blank(), # removes text for axes; if you want to keep axes text, remove or comment out this line
+      axis.ticks = element_blank(), # removes ticks for axes; if you want to keep axes ticks, remove or comment out this line
+      text = element_text(size = 24, color = "black"), # default size for text in plot
+      panel.border = element_rect(color = "black", fill = NA, linewidth = border_linewidth) # adds a rectangle border around plotted area
+    )
+}
+
+###############
+# Full inset map
+###############
+
+# use inset_map_func to generate the zoomed out inset with all local marsh sites and save a inset_map_full object
+
+inset_map_full <- inset_map_func( 
+  long_range = c(-71.05, -70.569), # set longitude range manually as desired; you can play with this as needed
+  lat_range = c(42.35, 42.77), # same for latitude
+  scale_bar_loc = "tr", # requesting scale bar go to topright
+  scale_text_cex = 1.5 # can change size of scale bar text here
+  ) 
+
+inset_map_full # prints inset_map_full
+
+###############
+# ROWLEY inset map
+###############
+
+# use inset_map_func to generate the zoomed in inset with the Rowley marsh sites and save as inset_map_ROW 
+# don't need to change the function to remove references to other sites aside from Rowley; rather, these points just don't appear because they are not included in the long and lat ranges provided for the Rowley zoomed inset
+
+inset_map_ROW <- inset_map_func( 
+  long_range = c(-70.88, -70.78),  
+  lat_range = c(42.71, 42.78),
+  scale_bar_loc = "tl",
+  scale_text_cex = 1.5) + 
+  theme(legend.position = "none") # took out legend here because going to add to full figure with legend in the inset_map_full; can remove this if you do want the marsh site legend
+
+inset_map_ROW #print rowley inset map
+
+# I also wanted to add subsite numbers to a version of this inset map to discern the subsite IDs
+# printing subsites for Rowley here so you can cross-reference which site_num or site_num_1to9 corresponds to which named subsite when interpreting the numbered map below (you can change these numbers as needed if you want to use different numbers or labels)
+data.frame(subsites_plot_locs)[data.frame(subsites_plot_locs)$site_shape == "Rowley", ]
+
+
+inset_map_ROW_sitenums <- inset_map_ROW + geom_sf_text( # this function will add points to inset_map_ROW plot as text
+  data = pts_ll,
+  aes(label = site_num_1to9),
+  size = 5, #size of points
+  nudge_y = 0.003, # bump text up (positive) or down (negative) a tiny bit
+  nudge_x = -0.003 # bump text right (positive) or left (negative) a tiny bit
+)
+inset_map_ROW_sitenums
+
+###############
+# RUMNEY and BELLE ISLE inset map
+###############
+
+# repeat the above for Rumney and Belle Isle; chose to map together because they are pretty close to each other...
+
+inset_map_RUMBEL <- inset_map_func( 
+  long_range = c(-71.05, -70.9), 
+  lat_range = c(42.35, 42.45),
+  scale_bar_loc = "tl",
+  scale_text_cex = 1.5) + 
+  theme(legend.position = "none") 
+
+inset_map_RUMBEL
+
+#add site numbers to a version of this inset map
+data.frame(subsites_plot_locs)[data.frame(subsites_plot_locs)$site_shape != "Rowley", ]
+
+inset_map_RUMBEL_sitenums <- inset_map_RUMBEL + geom_sf_text(
+  data = pts_ll,
+  aes(label = site_num_1to9),
+  size = 5,
+  nudge_y = 0.003,
+  nudge_x = -0.003
+)
+inset_map_RUMBEL_sitenums
+
+```
+
+### B4. Write inset maps to map_figs output folder
+```{r}
+# # uncomment below to save plots again
+#
+# ggsave(filename = file.path("map_figs","inset_map_full.pdf"), 
+#        plot = inset_map_full, 
+#        width = 6, height = 6)
+# 
+# ggsave(filename = file.path( "map_figs", "inset_map_row.pdf"), 
+#        plot = inset_map_ROW, 
+#        width = 6, height = 6)
+# 
+# ggsave(filename = file.path( "map_figs", "inset_map_rumbel.pdf"), 
+#        plot = inset_map_RUMBEL, 
+#        width = 6, height = 6)
+# 
+# ggsave(filename = file.path( "map_figs", "inset_map_row_sitenums.pdf"), 
+#        plot = inset_map_ROW_sitenums, 
+#        width = 6, height = 6)
+# 
+# ggsave(filename = file.path( "map_figs", "inset_map_rumbel_sitenums.pdf"), 
+#        plot = inset_map_RUMBEL_sitenums, 
+#        width = 6, height = 6)
+```
+
+
+
