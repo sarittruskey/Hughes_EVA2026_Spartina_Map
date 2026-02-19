@@ -7,6 +7,8 @@ output:
     toc: true
     toc_depth: 2
     number_sections: false
+editor_options: 
+  chunk_output_type: console
 ---
 
 This Rmd file generates the maps included in the Hughes et al. 2026 *Spartina* sourcing manuscript submitted to Evolutionary Applications. 
@@ -23,9 +25,22 @@ Randall asked for map similar-ish to Fig 1a of Truskey et al. 2025. Specifically
 
 Collections for the two focal species *Spartina alterniflora* (SA) and *Spartina patens* (SP) were effectively from most of the same subsites, so Randall suggests just using SA coordinates. We could then differentiate the only two unique subsites (Law’s is SA only and Stackyard South is SP only) as needed. Analyses and other plots are at the site-level, so seeing a super resolved distribution of all the subsites might not be needed. I'll go ahead and generate these subsite-level plots just in case though. 
 
+Colors for plotting provided by Serena to match up with other figs already made:
+
+| group | color |
+|:---|:---|
+| Nursery (MA) | thistle4 |
+| Nursery (NJ) | thistle3 |
+| Nursery (MD) | thistle2 |
+| Rumney | paleturquoise4 |
+| Rowley | paleturquoise3 |
+| Belle Isle | paleturquoise |
+
 ## Data Provenance
 * Spatial outline shapefiles for Massachusetts were obtained from MassGIS Data [(link to 25k state polygon and line datalayers)](https://www.mass.gov/info-details/massgis-data-state-outlines) 
 * Site- and subsite-level data from local marshes were compiled by Hughes lab members.
+
+<hr style="border: 1.25px solid black;"> 
 
 ```{r setup, include=FALSE}
 
@@ -72,6 +87,8 @@ library(ggspatial) # for adding scale bars to inset zoomed in plots
 
 sessionInfo() # this is always nice to include for reproducibility and for when you need to report package versions downstream (in a methods section, for instance)
 ```
+
+----
 
 ## A. Make base map with nursery and local marsh source sites
 ### A1. Get background layers for base map
@@ -156,9 +173,9 @@ base_map <- ggplot() +
   scale_fill_manual( # set fill color values; going to use the fill guide as the single all-things-covered guide so adding a bit extra here...
     values  = c( # this sets the colors that appear in the key
       marsh = "transparent", 
-      NJ = "plum4", 
-      MA = "plum3", 
-      MD = "plum1"),
+      MA = "thistle4",
+      NJ = "thistle3", 
+      MD = "thistle2"),
     breaks = c("marsh", "MA", "NJ", "MD"), # this controls the order in which the values are listed 
     labels = c( # this controls the actual name that will appear in the key 
     MA   = "MA nursery",
@@ -194,22 +211,21 @@ base_map_nolegend
 
 ### A6. Export to pdf
 ```{r}
-# # uncomment this chunk to write new plots to map_figs directory
-# # save plots as pdfs
-#
-# ggsave(
-#   filename =
-#     file.path(
-#       "map_figs", #output directory with root directory (see READme for expected directory structure if this is confusing)
-#       "base_map.pdf"), # last is the name for the output file, in this case base_map.pdf
-#   plot = base_map,
-#   width = 8, height = 6) # specify dimensions for pdf here
-#
-# # also want to output second plot that excludes the legend
-# ggsave(
-#   filename = file.path( "map_figs","base_map_nolegend.pdf"),
-#   plot = base_map_nolegend,
-#   width = 8, height = 6)
+# save plots as pdfs
+
+ggsave(
+  filename =
+    file.path(
+      "map_figs", #output directory with root directory (see READme for expected directory structure if this is confusing)
+      "base_map.pdf"), # last is the name for the output file, in this case base_map.pdf
+  plot = base_map,
+  width = 8, height = 6) # specify dimensions for pdf here
+
+# also want to output second plot that excludes the legend
+ggsave(
+  filename = file.path( "map_figs","base_map_nolegend.pdf"),
+  plot = base_map_nolegend,
+  width = 8, height = 6)
 
 ```
 
@@ -386,9 +402,9 @@ inset_map_func <- function(
     ) +
     scale_fill_manual( # set fill values for points by site name (site_shape field values, in this instance)
       values = c(
-        "Rowley"   = "turquoise1",
-        "Rumney"   = "turquoise4",
-        "Belle Isle" = "turquoise3"
+        "Rowley"   = "paleturquoise3",
+        "Rumney"   = "paleturquoise4",
+        "Belle Isle" = "paleturquoise"
       ),
       breaks = c("Rowley", "Rumney", "Belle Isle"), # list sites in this order in legend
       name = "Site" #name legend 'Site'
@@ -440,8 +456,8 @@ inset_map_full # prints inset_map_full
 # don't need to change the function to remove references to other sites aside from Rowley; rather, these points just don't appear because they are not included in the long and lat ranges provided for the Rowley zoomed inset
 
 inset_map_ROW <- inset_map_func( 
-  long_range = c(-70.88, -70.78),  
-  lat_range = c(42.71, 42.78),
+  long_range = c(-70.87, -70.78),  
+  lat_range = c(42.72, 42.78),
   scale_bar_loc = "tl",
   scale_text_cex = 1.5) + 
   theme(legend.position = "none") # took out legend here because going to add to full figure with legend in the inset_map_full; can remove this if you do want the marsh site legend
@@ -453,12 +469,21 @@ inset_map_ROW #print rowley inset map
 data.frame(subsites_plot_locs)[data.frame(subsites_plot_locs)$site_shape == "Rowley", ]
 
 
-inset_map_ROW_sitenums <- inset_map_ROW + geom_sf_text( # this function will add points to inset_map_ROW plot as text
-  data = pts_ll,
+inset_map_ROW_sitenums_no3sa <- inset_map_ROW + geom_sf_text( # this function will add points to inset_map_ROW plot as text
+  data = pts_ll[pts_ll$site_num_1to9 != "3sa",], # will add 3sa separately because label is really close to subsite 2 otherwise
   aes(label = site_num_1to9),
   size = 5, #size of points
-  nudge_y = 0.003, # bump text up (positive) or down (negative) a tiny bit
-  nudge_x = -0.003 # bump text right (positive) or left (negative) a tiny bit
+  nudge_y = -0.002, # bump text up (positive) or down (negative) a tiny bit
+  nudge_x = -0 # bump text right (positive) or left (negative) a tiny bit
+)
+inset_map_ROW_sitenums_no3sa
+
+inset_map_ROW_sitenums <- inset_map_ROW_sitenums_no3sa + geom_sf_text( # this function will add points to inset_map_ROW plot as text
+  data = pts_ll[pts_ll$site_num_1to9 == "3sa",], #adding in 3sa label
+  aes(label = site_num_1to9),
+  size = 5, #size of points
+  nudge_y = 0, # changed this so that it won't offset vertically
+  nudge_x = -0.004 # made this more negative so that this label will appear further to left of point
 )
 inset_map_ROW_sitenums
 
@@ -471,7 +496,7 @@ inset_map_ROW_sitenums
 inset_map_RUMBEL <- inset_map_func( 
   long_range = c(-71.05, -70.9), 
   lat_range = c(42.35, 42.45),
-  scale_bar_loc = "tl",
+  scale_bar_loc = "tr", #bumped scale to top right
   scale_text_cex = 1.5) + 
   theme(legend.position = "none") 
 
@@ -493,27 +518,27 @@ inset_map_RUMBEL_sitenums
 
 ### B4. Write inset maps to map_figs output folder
 ```{r}
-# # uncomment below to save plots again
-#
-# ggsave(filename = file.path("map_figs","inset_map_full.pdf"), 
-#        plot = inset_map_full, 
-#        width = 6, height = 6)
-# 
-# ggsave(filename = file.path( "map_figs", "inset_map_row.pdf"), 
-#        plot = inset_map_ROW, 
-#        width = 6, height = 6)
-# 
-# ggsave(filename = file.path( "map_figs", "inset_map_rumbel.pdf"), 
-#        plot = inset_map_RUMBEL, 
-#        width = 6, height = 6)
-# 
-# ggsave(filename = file.path( "map_figs", "inset_map_row_sitenums.pdf"), 
-#        plot = inset_map_ROW_sitenums, 
-#        width = 6, height = 6)
-# 
-# ggsave(filename = file.path( "map_figs", "inset_map_rumbel_sitenums.pdf"), 
-#        plot = inset_map_RUMBEL_sitenums, 
-#        width = 6, height = 6)
+# saving plots as pdfs
+
+ggsave(filename = file.path("map_figs","inset_map_full.pdf"),
+       plot = inset_map_full,
+       width = 6, height = 6)
+
+ggsave(filename = file.path( "map_figs", "inset_map_row.pdf"),
+       plot = inset_map_ROW,
+       width = 6, height = 6)
+
+ggsave(filename = file.path( "map_figs", "inset_map_rumbel.pdf"),
+       plot = inset_map_RUMBEL,
+       width = 6, height = 6)
+
+ggsave(filename = file.path( "map_figs", "inset_map_row_sitenums.pdf"),
+       plot = inset_map_ROW_sitenums,
+       width = 6, height = 6)
+
+ggsave(filename = file.path( "map_figs", "inset_map_rumbel_sitenums.pdf"),
+       plot = inset_map_RUMBEL_sitenums,
+       width = 6, height = 6)
 ```
 
 
