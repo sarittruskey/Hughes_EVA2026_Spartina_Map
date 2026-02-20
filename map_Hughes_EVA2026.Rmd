@@ -15,7 +15,7 @@ This Rmd file generates the maps included in the Hughes et al. 2026 *Spartina* s
 
 I've included detailed annotations as a walk-through to understanding what is going on in this script and to facilitate further map making for Hughes Lab members (particularly for fine-scaled maps of Massachusetts coastal areas but also more widely applicable). Happy mapping!
 
-**Before running**: Set your working directory to the Hughes_EVA2026_Map/ folder. The directory check in the first chunk will confirm you're in the right place.
+**Before running**: Set your working directory to the Hughes_EVA2026_Spartina_Map/ folder. The directory check in the first chunk will confirm you're in the right place.
 
 ## Outline
 
@@ -329,14 +329,15 @@ In all, I want to create:
 
 * Note, I generally like to make all the inset maps in R and output as pdfs or jpgs but then make the final combined version of the full maps with insets added in either Keynote or Inkscape. I find making the full map version a bit finnicky in R (i.e., getting placements right, overlapping regions, etc.) and rather like to put it all together and add finishing touches in Keynote/Inkscape. You can also do this in PowerPoint. There are definitely packages that will put insets into maps for you, but I prefer doing that styling manually on my own. I've included the keynote file for this figure as a download for reference.  
 
+#### Getting data ready for plotting
 ```{r}
-# Convert site data points to sf (lon/lat)
+# Convert site data points to sf (lon/lat) for plotting
 pts_ll <- st_as_sf(subsites_plot_locs, coords = c("longitude", "latitude"), crs = 4326)
 # st_as_sf() converts a regular dataframe into a spatial (sf) object that ggplot's geom_sf() can plot
 # coords specifies which columns hold the x (longitude) and y (latitude) values
 # crs = 4326 tells sf these coordinates are in WGS84 lat/lon — the standard GPS coordinate system
 
-# You can also build a buffered box around points, tuning distance to in buffer_m to control the level of zoom for an inset
+# You can also generate values for what would be a buffered box around your data points, tuning distance to in buffer_m to control the level of zoom for an inset
 # buffer_m <- 8000  # e.g., 8 km buffer; adjust until it looks right
 # zoom_geom <- st_buffer(st_union(pts_ll), dist = buffer_m)
 # zoom_bbox <- st_bbox(zoom_geom)
@@ -346,146 +347,109 @@ pts_ll <- st_as_sf(subsites_plot_locs, coords = c("longitude", "latitude"), crs 
 # note, this buffer step was really finicky to do for these maps because the coastline is kinda wonky here so it made the crop itself look strange...
 # instead, I hard coded cropped areas for insets below in each of the inset plots; leaving buffer code here in case it is useful to anyone
 
-###############
-# PLOTTING insets
-###############
+```
 
-# I'm writing a function (inset_map_func) to generate the inset map plots because I want to make a handful of similar map figures with only slight changes between them.
-# Note: this function relies on three objects from the global environment: 
-# ma_outline, ma_outline_poly (shapefiles loaded earlier in section B1), and pts_ll (just created above).
-# These are used directly rather than passed as arguments to keep function calls simple since these don't change between inset plots. Rather the only thing I am really wanting to change is the longitude and latitude range, and maybe a few formatting variables. I describe these below in writing the function. 
-# Being able to just call the function rather than write out the full plotting chunk is nice when you are exploring the range of longitudes and latitudes you actually want to use.
 
-inset_map_func <- function(
-    long_range, # variable for longitude range (map will be cropped to these longitudes)
-    lat_range, # variable for latitude range (map will be cropped to these latitudes)
-    scale_bar_loc = "tl", # this is the area in the plot where the scale bar will be added; if not changed, will default to topleft via "tl"
-    scale_text_cex = 1.5, # this is the text size for the scale bar, defaults to 1.5 unless changed in call
-    point_size = 5, # this is the default size of the points used for subsites, unless changed in call
-    point_alpha = 0.6, # this is the default alpha value for points
-    border_linewidth = 2 # this is the weight of the border around the plot area
-) {
-  # body of function for plotting; will be similar to base map but adding a few extra things
-  ggplot() +
-    geom_sf(
-      data = ma_outline_poly, # this is the poly shapefile already imported for MA (used across inset plots)
-      fill = "grey85",
-      color = NA
-    ) +
-    geom_sf(
-      data = ma_outline, # this is the line shapefile already imported for MA (used across inset plots)
-      fill = NA,
-      color = "black",
-      linewidth = 0.2
-    ) +
-    geom_sf(
-      data = pts_ll, # this is the sf object with the subsite datapoints
-      aes(shape = site_shape, # shape of point determined by site_shape field
-          fill = site_shape), # fill color of point determined by site_shape field too
-      size = point_size, # point_size variable in function call will change size of points or default to 5
-      stroke = 0.9,
-      color = "black",
-      alpha = point_alpha # point_alpha variable in function call will change alpha for points or default to 0.6
-    ) +
-    coord_sf(
-      xlim = long_range, # long_range variable in function call will manually set x range (longitude) for map
-      ylim = lat_range,  # lat_range variable in function call will manually set y range (latitude) for map
-      expand = FALSE
-    ) +
-    scale_shape_manual( # set shape values for points by site name (site_shape field)
-      values = c(
-        "Belle Isle" = 23, # diamond
-        "Rumney" = 21, # circle
-        "Rowley" = 22  # square
-      ),
-      guide = "none" # take out legend for shape 
-    ) +
-    scale_fill_manual( # set fill values for points by site name (site_shape field values, in this instance)
-      values = c(
-        "Rowley"   = "paleturquoise3",
-        "Rumney"   = "paleturquoise4",
-        "Belle Isle" = "paleturquoise"
-      ),
-      breaks = c("Rowley", "Rumney", "Belle Isle"), # list sites in this order in legend
-      name = "Site" #name legend 'Site'
-    ) +
-    guides(
-      fill = guide_legend( # customize fill legend
-        override.aes = list(
-          shape = c(22, 21, 23), # this should be in order of breaks for fill supplied above
-          color = "black",
-          size = 6 # making points a bit bigger in legend
-        )
-      )
-    ) +
-    annotation_scale( #add spatial scale bar
-      location = scale_bar_loc, # where you want the scale bar to be placed; defaults to "tl" topleft but can be changed in calling function
-      text_cex = scale_text_cex # size of text in scale bar; defaults to 1.5 unless another value provided
-    ) +
-    theme(
-      panel.background = element_rect(fill = "white"),
-      panel.grid = element_line(color = "transparent"),
-      axis.title = element_blank(), #removes axes title; if you want to keep axes labels, remove or comment out this line
-      axis.text = element_blank(), # removes text for axes; if you want to keep axes text, remove or comment out this line
-      axis.ticks = element_blank(), # removes ticks for axes; if you want to keep axes ticks, remove or comment out this line
-      text = element_text(size = 24, color = "black"), # default size for text in plot
-      panel.border = element_rect(color = "black", fill = NA, linewidth = border_linewidth) # adds a rectangle border around plotted area
-    )
-}
+I wrote a function to generate the zoomed-in inset map plots that can both be reused a bunch of times here for similar plots AND can be reused by you for other regions (provided you have shapefiles) and collection location datasets. The plotting function (`inset_map_gen_func`) is defined in a separate script `inset_map_gen_func.R`. Study-specific plotting values (site shapes, fill colors, legend order) are defined in here in this script and usage below can be taken as an example for how to apply to a different set of spatial data. 
+
+Being able to call the function rather than write out a full plotting chunk is particularly nice when you are exploring a range of longitudes and latitudes you actually want to use for a given zoomed-in map plot. 
+
+#### Plotting the zoomed-in inset maps
+```{r}
+# Source (or load) the generalized inset map function (this function should be in the same directory as the map_Hughes_EVA2026.Rmd)
+source("inset_map_gen_func.R") 
+# You should see this function pop up in you environment once sourced. You can take a look at the function by clicking on it in your environment pop up.  
+
+# There are a few aesthetic values to define: set_shape_vals, set_fill_vals, set_fill_breaks
+
+# assigning point shapes by site
+set_shape_vals <- c("Rowley" = 22,
+                    "Rumney" = 21, 
+                    "Belle Isle" = 23) 
+
+# assigning fill colors by site
+set_fill_vals  <- c("Rowley" = "paleturquoise3", 
+                    "Rumney" = "paleturquoise4", 
+                    "Belle Isle" = "paleturquoise") 
+# order i want sites to appear for fill legend
+set_fill_breaks <- c("Rowley", 
+                     "Rumney",
+                     "Belle Isle") 
+
+# To adapt for a new study, replace the values above with your own sites, shapes, and colors! 
+# The function itself in the sourced R script does not need to change (unless you want to add axes back in or something like that...)
 
 ###############
 # Full inset map
 ###############
-
-# use inset_map_func to generate the zoomed out inset with all local marsh sites and save a inset_map_full object
-
-inset_map_full <- inset_map_func( 
-  long_range = c(-71.05, -70.569), # set longitude range manually as desired; you can play with this as needed
-  lat_range = c(42.35, 42.77), # same for latitude
-  scale_bar_loc = "tr", # requesting scale bar go to topright
+inset_map_full <- inset_map_gen_func(
+  long_range    = c(-71.05, -70.569), # set longitude range manually as desired; you can play with this as needed
+  lat_range     = c(42.35, 42.77), # same for latitude
+  pts_sf           = pts_ll, # sf points object of subsite locations for Hughes EVA 2026
+  outline_poly  = ma_outline_poly, # MassGIS polygon shapefile 
+  outline_arc   = ma_outline, # MassGIS arc outline shapefile 
+  shape_col      = "site_shape", # name of column in pts_sf that determines shape
+  shape_vals    = set_shape_vals, # vector with shapes values assigned to site_shape levels (defined above)
+  fill_col      = "site_shape", # name of column in pts_sf that determines fill
+  fill_vals     = set_fill_vals, # vector with fill color values assigned to site_shape levels (defined above)
+  fill_breaks   = set_fill_breaks, # vector order in which I want the site_shape levels to appear in the fill legend (defined above)
+  fill_name = "Site", # header name for the fill legend
+  scale_bar_loc = "tr", # scale bar goes to topright
   scale_text_cex = 1.5 # can change size of scale bar text here
-  ) 
+)
 
-inset_map_full # prints inset_map_full
+inset_map_full 
 
 ###############
 # ROWLEY inset map
 ###############
 
-# use inset_map_func to generate the zoomed in inset with the Rowley marsh sites and save as inset_map_ROW 
+# use inset_map_func to generate the zoomed in inset with only the Rowley marsh subsites
 # don't need to change the function to remove references to other sites aside from Rowley; rather, these points just don't appear because they are not included in the long and lat ranges provided for the Rowley zoomed inset
 
-inset_map_ROW <- inset_map_func( 
-  long_range = c(-70.87, -70.78),  
-  lat_range = c(42.72, 42.78),
-  scale_bar_loc = "tl",
+inset_map_row <- inset_map_gen_func(
+  long_range = c(-70.87, -70.78), # changed to smaller range to center rowley
+  lat_range = c(42.72, 42.78), # changed to smaller range to center rowley
+  pts_sf           = pts_ll,
+  outline_poly  = ma_outline_poly,  
+  outline_arc   = ma_outline, 
+  shape_col      = "site_shape",
+  shape_vals    = set_shape_vals, 
+  fill_col      = "site_shape", 
+  fill_vals     = set_fill_vals, 
+  fill_breaks   = set_fill_breaks, 
+  fill_name = "Site", 
+  scale_bar_loc = "tr",
   scale_text_cex = 1.5) + 
-  theme(legend.position = "none") # took out legend here because going to add to full figure with legend in the inset_map_full; can remove this if you do want the marsh site legend
+  theme(legend.position = "none") # took out legend here because going to add to full figure with legend in the inset_map_full; can remove this if you do want to keep site legend
 
-inset_map_ROW #print rowley inset map
+inset_map_row 
 
 # I also wanted to add subsite numbers to a version of this inset map to discern the subsite IDs
-# printing subsites for Rowley here so you can cross-reference which site_num or site_num_1to9 corresponds to which named subsite when interpreting the numbered map below (you can change these numbers as needed if you want to use different numbers or labels)
+# printing subsites for Rowley here so you can cross-reference which site_num_1to9 corresponds to which named subsite when interpreting the numbered map below
 data.frame(subsites_plot_locs)[data.frame(subsites_plot_locs)$site_shape == "Rowley", ]
 
-
-inset_map_ROW_sitenums_no3sa <- inset_map_ROW + geom_sf_text( # this function will add points to inset_map_ROW plot as text
-  data = pts_ll[pts_ll$site_num_1to9 != "3sa",], # will add 3sa separately because label is really close to subsite 2 otherwise
-  aes(label = site_num_1to9),
+# The subsite labels for rowley include two that are a bit long (3sa and 3sp). I'm adding labels except 3sa first, then will add 3sa in second at a slightly different position. 
+# Adding subsite labels without 3sa
+inset_map_row_sitenums_no3sa <- inset_map_row + geom_sf_text( # this function will add points as text to map
+  data = pts_ll[pts_ll$site_num_1to9 != "3sa",], # include all pts except 3sa
+  aes(label = site_num_1to9), # use labels in column site_num_1to9
   size = 5, #size of points
   nudge_y = -0.002, # bump text up (positive) or down (negative) a tiny bit
   nudge_x = -0 # bump text right (positive) or left (negative) a tiny bit
 )
-inset_map_ROW_sitenums_no3sa
+# you may get a small warning message here about the precision of text placements in coordinate field...don't worry about it!
+inset_map_row_sitenums_no3sa 
 
-inset_map_ROW_sitenums <- inset_map_ROW_sitenums_no3sa + geom_sf_text( # this function will add points to inset_map_ROW plot as text
-  data = pts_ll[pts_ll$site_num_1to9 == "3sa",], #adding in 3sa label
+inset_map_row_sitenums <- inset_map_row_sitenums_no3sa + geom_sf_text( # this function will add points to inset_map_ROW plot as text
+  data = pts_ll[pts_ll$site_num_1to9 == "3sa",], #adding in 3sa pt only
   aes(label = site_num_1to9),
-  size = 5, #size of points
+  size = 5, 
   nudge_y = 0, # changed this so that it won't offset vertically
   nudge_x = -0.004 # made this more negative so that this label will appear further to left of point
 )
-inset_map_ROW_sitenums
+inset_map_row_sitenums
+# placement of labels still a bit awkward but good enough to discern subsite IDs now 
 
 ###############
 # RUMNEY and BELLE ISLE inset map
@@ -493,26 +457,35 @@ inset_map_ROW_sitenums
 
 # repeat the above for Rumney and Belle Isle; chose to map together because they are pretty close to each other...
 
-inset_map_RUMBEL <- inset_map_func( 
-  long_range = c(-71.05, -70.9), 
-  lat_range = c(42.35, 42.45),
-  scale_bar_loc = "tr", #bumped scale to top right
+inset_map_rumbel <- inset_map_gen_func(
+  long_range = c(-71.05, -70.9), # now encompasses rumney and belle isle
+  lat_range = c(42.35, 42.45), # now encompasses rumney and belle isle
+  pts_sf           = pts_ll,
+  outline_poly  = ma_outline_poly,  
+  outline_arc   = ma_outline, 
+  shape_col      = "site_shape",
+  shape_vals    = set_shape_vals, 
+  fill_col      = "site_shape", 
+  fill_vals     = set_fill_vals, 
+  fill_breaks   = set_fill_breaks, 
+  fill_name = "Site", 
+  scale_bar_loc = "tr",
   scale_text_cex = 1.5) + 
   theme(legend.position = "none") 
 
-inset_map_RUMBEL
+inset_map_rumbel 
 
-#add site numbers to a version of this inset map
+#add site numbers to a version of this map
 data.frame(subsites_plot_locs)[data.frame(subsites_plot_locs)$site_shape != "Rowley", ]
 
-inset_map_RUMBEL_sitenums <- inset_map_RUMBEL + geom_sf_text(
+inset_map_rumbel_sitenums <- inset_map_rumbel + geom_sf_text(
   data = pts_ll,
   aes(label = site_num_1to9),
   size = 5,
   nudge_y = 0.003,
   nudge_x = -0.003
 )
-inset_map_RUMBEL_sitenums
+inset_map_rumbel_sitenums
 
 ```
 
@@ -525,19 +498,19 @@ ggsave(filename = file.path("map_figs","inset_map_full.pdf"),
        width = 6, height = 6)
 
 ggsave(filename = file.path( "map_figs", "inset_map_row.pdf"),
-       plot = inset_map_ROW,
+       plot = inset_map_row,
        width = 6, height = 6)
 
 ggsave(filename = file.path( "map_figs", "inset_map_rumbel.pdf"),
-       plot = inset_map_RUMBEL,
+       plot = inset_map_rumbel,
        width = 6, height = 6)
 
 ggsave(filename = file.path( "map_figs", "inset_map_row_sitenums.pdf"),
-       plot = inset_map_ROW_sitenums,
+       plot = inset_map_row_sitenums,
        width = 6, height = 6)
 
 ggsave(filename = file.path( "map_figs", "inset_map_rumbel_sitenums.pdf"),
-       plot = inset_map_RUMBEL_sitenums,
+       plot = inset_map_rumbel_sitenums,
        width = 6, height = 6)
 ```
 

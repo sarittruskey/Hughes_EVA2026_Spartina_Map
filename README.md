@@ -14,6 +14,11 @@ and the general Massachusetts local marsh area) and a set of fine-scale
 inset maps zoomed in to the three Massachusetts coastal marsh sites:
 Belle Isle, Rumney Marsh, and Rowley Great Marsh.
 
+The Rmd is structured in two parts: A) the base map, with plotting code
+written step-by-step directly in the script; and B) the inset maps,
+generated using a reusable generalized plotting function defined in
+`inset_map_gen_func.R` and sourced into the main script.
+
 This Rmd was created as a teaching resource for the Hughes Lab (Marine
 Science Center, Northeastern University) and is **annotated in detail**
 throughout — if you are new to making maps in `ggplot2` or using `sf`
@@ -24,6 +29,7 @@ mapping tools, read the inline comments as you step through each chunk.
 ## Repository structure
 
     Hughes_EVA2026_Spartina_Map/
+    ├── inset_map_gen_func.R  # Script defining generalized mapping function for the zoomed-in inset maps (annotated for instruction)
     ├── map_Hughes_EVA2026.Rmd  # Main mapping script (annotated for instruction)
     ├── map_Hughes_EVA2026.html # Knitted output for reference
     ├── README.Rmd # R markdown that renders README.md 
@@ -101,7 +107,10 @@ head(read.csv(
 ## How to reproduce the maps
 
 1.  **Clone or download** this repository and unzip if needed.
-2.  **Open** `map_Hughes_EVA2026.Rmd` in RStudio.
+2.  **Open** `map_Hughes_EVA2026.Rmd` in RStudio. This main script
+    sources `inset_map_gen_func.R` automatically — the file that
+    contains the generalized inset map function and is annotated
+    separately for reuse with other regions.
 3.  **Set your working directory** to the root `Hughes_EVA2026_Map/`
     folder:
     - In RStudio: *Session → Set Working Directory → To Source File
@@ -146,9 +155,10 @@ as a download in this repository for reference, also in `map_figs/`
 - For the inset maps, you can swap in a different regional shapefile
   (e.g., from [RIGIS](https://www.rigis.org/pages/map-collections) for
   Rhode Island) to adapt this workflow to other regions.
-- The inset map function `inset_map_func()` is reusable. Pass different
+- The inset map function `inset_map_gen_func()` is reusable and defined
+  in the standalone R script `inset_map_gen_func.R`. Pass different
   `long_range` and `lat_range` values to zoom to any coastal area.
-- Final figures were assembled in **Keynote** after exporting individual
+- Final figures were assembled in Keynote after exporting individual
   PDFs — combining map components directly in R can be finicky with
   fine-scaled coastal data.
 
