@@ -29,8 +29,8 @@ Colors for plotting provided by Serena to match up with other figs already made:
 
 | group | color |
 |:---|:---|
-| Nursery (MA) | thistle4 |
-| Nursery (NJ) | thistle3 |
+| Nursery (MA) | thistle3 |
+| Nursery (NJ) | thistle4 |
 | Nursery (MD) | thistle2 |
 | Rumney | paleturquoise4 |
 | Rowley | paleturquoise3 |
@@ -173,8 +173,8 @@ base_map <- ggplot() +
   scale_fill_manual( # set fill color values; going to use the fill guide as the single all-things-covered guide so adding a bit extra here...
     values  = c( # this sets the colors that appear in the key
       marsh = "transparent", 
-      MA = "thistle4",
-      NJ = "thistle3", 
+      MA = "thistle3",
+      NJ = "thistle4", 
       MD = "thistle2"),
     breaks = c("marsh", "MA", "NJ", "MD"), # this controls the order in which the values are listed 
     labels = c( # this controls the actual name that will appear in the key 
