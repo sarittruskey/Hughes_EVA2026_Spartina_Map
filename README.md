@@ -4,7 +4,7 @@ Hughes Lab EVA 2026 Spartina Map — README
 <!-- README.md is generated from README.Rmd. -->
 
 **Author:** Sarit Truskey  
-**Last updated:** 2026-02-19
+**Last updated:** 2026-03-12
 
 Reproducible R Markdown workflow for generating the maps included in
 Hughes et al. EVA 2026 manuscript on *Spartina* sourcing for
@@ -48,11 +48,11 @@ mapping tools, read the inline comments as you step through each chunk.
 The inset maps use the **MassGIS State Outlines (1:25,000)** layer, a
 product created and maintained by the Commonwealth of Massachusetts
 Bureau of Geographic Information. I have included the shapefiles data
-here within this repository because the file size is relatively small
-and mistakes in downloading the shapefiles are often the most common
-error. However, just for the sake of unpacking and in case the user
-wants to download these data themselves or another version, below are
-instructions for downloading the spatial shapefiles.
+within this repository because the file size is relatively small and
+mistakes in downloading these data are the most common error you’ll run
+into. However just for the sake of unpacking and in case you’d like to
+download these data on your own, below are instructions for downloading
+the Massachusetts spatial shapefiles.
 
 1.  Go to:
     <https://www.mass.gov/info-details/massgis-data-state-outlines>
