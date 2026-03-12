@@ -19,7 +19,8 @@ I've included detailed annotations as a walk-through to understanding what is go
 
 ## Outline
 
-Randall asked for map similar-ish to Fig 1a of Truskey et al. 2025. Specifically, 
+Randall asked for map similar-ish to Fig 1a of Truskey et al. 2025. Specifically,
+
 * a base map with approximate triangles to indicate where the 3 *Spartina* nurseries in Massachusetts (MA), New Jersey (NJ), and Maryland (MD), 
 * and then an inset map of the local MA marshes that shows the 9 subsites at Belle Isle (diamonds), Rumney (circles), and Rowley (squares) where separate collections were also taken.  
 
@@ -51,16 +52,18 @@ knitr::opts_chunk$set(
   warning = FALSE # don't print warnings in the output knitted file
 )
 
-# Directory structure required to run this script
-required_dirs <- c("data", "map_figs") # this Rmd should be housed within a directory that has internal directories data (that has the input data to produce inset figures) and map_figs (where output map plots are written to)
-missing_dirs <- required_dirs[!dir.exists(required_dirs)]
+# The lines below check the expected directory structure required to run this script
 
-if (length(missing_dirs) > 0) { # this if-statement will double-check that this is the case for you and, if not the case, will produce the following error message that includes which of the internal directories you are missing 
+required_dirs <- c("data", "map_figs") # this Rmd should be housed within a directory that has the internal directories: data (folder with the input data to produce inset figures) and map_figs (folder where output map plots are written to)
+missing_dirs <- required_dirs[!dir.exists(required_dirs)] # if either data or map_figs is missing, it will be saved to missing_dirs vector
+
+if (length(missing_dirs) > 0) { # this if-statement will produce the following error message that includes which of the internal directories you are missing (if applicable) 
   stop(
     "This Rmd must be run from the root directory that includes data and map_figs directories.\n",
     "Missing directories: ", paste(missing_dirs, collapse = ", ")
   )
 }
+
 
 ```
 
@@ -128,7 +131,6 @@ marsh_centerpt # we'll use this to center a rectangle around the local marsh sit
 
 # Nursery locations 
 # I just got approximate ones off google maps that reflected the vague area in which the nurseries were located and created a dataframe to house those values
-
 nursery_sites <- data.frame(
   type = "nursery",
   site_label = c("MA", "NJ", "MD"),
@@ -152,8 +154,8 @@ base_map <- ggplot() +
     color = "black", # state borders and coastline should be outlines in black
     linewidth = 0.3) +
   coord_sf( # this controls map extent: adjust these numbers as wanted to make the plot more or less zoomed in to the sites
-    xlim = c(-78, -69), # x is longitude
-    ylim = c(37, 43.5), # y is latitude
+    xlim = c(-78, -69), # x is longitude (you can adjust these as desired)
+    ylim = c(37, 43.5), # y is latitude (you can adjust these as desired)
     expand = FALSE) + 
   geom_point( # add points for sources
     data = all_sites_locs,
@@ -233,6 +235,7 @@ ggsave(
 ## B. Inset maps for local marsh source subsites
 ### B1. Read in MassGIS coastline/shoreline layer
 I am using the shapefiles for Massachusetts coastline provide by MassGIS [(link)](https://www.mass.gov/info-details/massgis-data-state-outlines)
+
 * Note, you need to download, unzip, and keep the contents of the full file with all shapefiles and not just file with .shp extension. See Data setup in README for further download instructions. If you are getting cannot open errors from st_read() below an issue with not having all the required shapefiles is almost certainly why.
 * Secondary note, you can make similar fine-scale maps of other areas by just subbing in shapefiles for those areas. A link to Rhode Island shapefiles is included in README. 
 
